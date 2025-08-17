@@ -1,3 +1,4 @@
+// src/text-commands/메추.js
 const { Events } = require('discord.js');
 
 // 카테고리별 메뉴
@@ -12,15 +13,17 @@ const menusByCat = {
   ],
   '일식': [
     '🍣 초밥','🐟 사시미','🍛 일본식 카레','🍜 라멘','🍜 우동','🥢 야키소바',
-    '🥩 돈카츠','🍚 가츠동','🍤 텐동','🍲 나베','🍙 오니기리','🐙 타코야키','🥟 교자','🥢 오코노미야키'
+    '🥩 돈카츠','🍚 가츠동','🍤 텐동','🍲 나베','🍙 오니기리','🐙 타코야키',
+    '🥟 교자','🥢 오코노미야키'
   ],
   '중식': [
     '🍜 짜장면','🔥 짬뽕','🍖 탕수육','🥘 마파두부','🥩 라조기','🍤 깐쇼새우',
-    '🥩 유산슬','🍚 볶음밥','🍜 우육면','🌶️ 마라탕','🌶️ 마라샹궈','🍲 훠궈','🥟 딤섬'
+    '🥩 유산슬','🍚 볶음밥','🍜 우육면','🌶️ 마라탕','🌶️ 마라샹궈','🍲 훠궈',
+    '🥟 딤섬'
   ],
   '양식': [
     '🍕 피자','🍝 토마토 파스타','🥛 크림 파스타','🧄 알리오올리오','🥩 스테이크',
-    '🍔 띠드버거','🌭 핫도그','🥗 시저샐러드','🍚 리조또','🥘 비프스튜','🥪 파니니'
+    '🍔 치즈버거','🌭 핫도그','🥗 시저샐러드','🍚 리조또','🥘 비프스튜','🥪 파니니'
   ],
   '동남아': [
     '🍜 퍼(쌀국수)','🥗 분짜','🥖 반미','🍜 카오쏘이','🍝 팟타이',
@@ -47,13 +50,6 @@ const menusByCat = {
 };
 const ALL = Object.values(menusByCat).flat();
 
-function sampleWithoutReplace(arr, k) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return a.slice(0, Math.max(0, Math.min(k, a.length)));
-}
-
-// 카테고리 입력 보정 (동의어/줄임말)
 function normalizeCat(raw) {
   if (!raw) return null;
   const s = raw.replace(/\s+/g, '').toLowerCase();
@@ -70,38 +66,60 @@ function normalizeCat(raw) {
   return null;
 }
 
-client.on(Events.MessageCreate, async (msg) => {
-  try {
-    if (msg.author.bot) return;
-    if (!msg.guild) return; // DM은 무시 (원하면 허용 가능)
-
-    // 형식: /메추 [카테고리] [개수]
-    const m = msg.content.trim();
-    if (!m.startsWith('/메추')) return;
-
-    const parts = m.split(/\s+/).slice(1); // [/메추, ...]에서 인자만
-    const rawCat = parts[0];
-    const rawCnt = parts[1];
-
-    const cat = normalizeCat(rawCat) || (rawCat ? rawCat : null);
-    const count = Math.min(5, Math.max(1, parseInt(rawCnt, 10) || 1));
-
-    let pool, label;
-    if (!cat) {
-      pool = ALL;
-      label = '전체';
-    } else if (menusByCat[cat]) {
-      pool = menusByCat[cat];
-      label = cat;
-    } else {
-      // 지원 카테고리 안내
-      const cats = Object.keys(menusByCat).join(', ');
-      return msg.reply(`사용법: \`/메추 [카테고리] [개수]\`\n예) \`/메추 한식\`, \`/메추 한식 3\`\n가능한 카테고리: ${cats}`);
-    }
-
-    const picks = sampleWithoutReplace(pool, count);
-    await msg.reply(`오늘 메뉴 추천${count > 1 ? ` (${label}, ${count}개)` : ` (${label})`}: ${picks.map(p => `**${p}**`).join(', ')}`);
-  } catch (e) {
-    console.error('메추 처리 오류:', e);
+function sampleWithoutReplace(arr, k) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
   }
-});
+  return a.slice(0, Math.max(0, Math.min(k, a.length)));
+}
+
+/** 이미 등록된 리스너가 있으면 교체해 중복 등록 방지 */
+function registerMechu(client) {
+  if (client.__mechuHandler) {
+    client.off(Events.MessageCreate, client.__mechuHandler);
+  }
+
+  const handler = async (msg) => {
+    try {
+      if (msg.author.bot || !msg.guild) return;
+
+      const content = msg.content.trim();
+      // '/메추 …' 또는 '메추 …' 모두 허용
+      if (!(content.startsWith('/메추') || content.startsWith('메추'))) return;
+
+      const parts = content.replace(/^\/?메추/, '').trim().split(/\s+/).filter(Boolean);
+      const rawCat = parts[0];
+      const rawCnt = parts[1];
+
+      const cat = normalizeCat(rawCat) || (rawCat ? rawCat : null);
+      const count = Math.min(5, Math.max(1, parseInt(rawCnt, 10) || 1));
+
+      let pool, label;
+      if (!cat) { pool = ALL; label = '전체'; }
+      else if (menusByCat[cat]) { pool = menusByCat[cat]; label = cat; }
+      else {
+        const cats = Object.keys(menusByCat).join(', ');
+        return msg.reply(
+          `사용법: \`/메추 [카테고리] [개수]\`\n` +
+          `예) \`/메추 한식\`, \`/메추 한식 3\`\n` +
+          `가능한 카테고리: ${cats}`
+        );
+      }
+
+      const picks = sampleWithoutReplace(pool, count);
+      await msg.reply(
+        `오늘 메뉴 추천${count > 1 ? ` (${label}, ${count}개)` : ` (${label})`}: ` +
+        picks.map(p => `**${p}**`).join(', ')
+      );
+    } catch (e) {
+      console.error('메추 처리 오류:', e);
+    }
+  };
+
+  client.on(Events.MessageCreate, handler);
+  client.__mechuHandler = handler;
+}
+
+module.exports = registerMechu;
