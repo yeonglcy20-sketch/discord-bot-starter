@@ -65,7 +65,3 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 });
-
-// ⬇️ 여기까지가 Step 2. (Step 3의 메시지 기반 "/메추 한식 3" 처리 코드는 아직 미포함)
-
-client.login(TOKEN);
