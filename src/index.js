@@ -10,7 +10,7 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-// ✅ 기본(변경 전) 형태: 슬래시 명령 전용 / 메시지 인텐트 없음
+// 슬래시 명령 전용 (메시지 인텐트 없음)
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds, // 슬래시 명령 처리에 충분
