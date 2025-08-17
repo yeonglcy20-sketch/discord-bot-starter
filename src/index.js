@@ -4,16 +4,15 @@ const { Client, Collection, GatewayIntentBits, Events } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// ⬇️ 분리된 메시지 명령 리스너 등록 함수
-const registerMechu = require('./text-commands/메추');
-
 const TOKEN = (process.env.DISCORD_TOKEN || '').trim();
 if (!TOKEN) {
   console.error('❌ DISCORD_TOKEN이 비어있어요 (.env/환경변수 확인)');
   process.exit(1);
 }
 
-// ✅ 메시지 읽기용 인텐트 포함 (포털에서 Message Content Intent도 ON 필요)
+// ─────────────────────────────────────────────────────────────
+// 클라이언트: 메시지 기반 명령을 위해 메시지 인텐트 포함
+// (디스코드 개발자 포털 → Bot → Message Content Intent = ON 필요)
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,         // 슬래시 명령
@@ -22,24 +21,30 @@ const client = new Client({
   ],
 });
 
-// ── 슬래시 명령 로딩 (commands 폴더)
+// ─────────────────────────────────────────────────────────────
+// 슬래시 명령 로딩 (src/commands/*.js)
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
   const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
   for (const file of commandFiles) {
-    const command = require(path.join(commandsPath, file));
-    if ('data' in command && 'execute' in command) {
-      client.commands.set(command.data.name, command);
-      console.log(`Loaded command: /${command.data.name}`);
-    } else {
-      console.warn(`⚠️ ${file}: "data" 또는 "execute" 누락, 스킵`);
+    try {
+      const command = require(path.join(commandsPath, file));
+      if ('data' in command && 'execute' in command) {
+        client.commands.set(command.data.name, command);
+        console.log(`Loaded command: /${command.data.name}`);
+      } else {
+        console.warn(`⚠️ ${file} : "data" 또는 "execute"가 없습니다. 스킵합니다.`);
+      }
+    } catch (e) {
+      console.error(`❌ 슬래시 명령 로드 실패: ${file}`, e);
     }
   }
 } else {
   console.warn('⚠️ commands 폴더가 없어 슬래시 명령을 로드하지 않았습니다.');
 }
 
+// ─────────────────────────────────────────────────────────────
 client.once(Events.ClientReady, (c) => {
   console.log(`✅ 로그인 성공: ${c.user.tag}`);
 });
@@ -72,8 +77,44 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// ── 메시지 기반 "/메추 [카테고리] [개수]" 리스너 등록
-registerMechu(client);
+// ─────────────────────────────────────────────────────────────
+// 메시지 기반 "/메추 [카테고리] [개수]" 리스너 동적 로드
+const tcDir = path.join(__dirname, 'text-commands');
+let registerMechu = null;
+try {
+  // 한글 파일명 우선 시도
+  registerMechu = require('./text-commands/메추');
+  console.log('Loaded text command handler: text-commands/메추.js');
+} catch {
+  try {
+    // 영문 대체 파일명 시도
+    registerMechu = require('./text-commands/mechu');
+    console.log('Loaded text command handler: text-commands/mechu.js');
+  } catch {
+    try {
+      // 폴더 스캔하여 mechu/메추 포함된 .js 탐색 (정규화 이슈 대비)
+      if (fs.existsSync(tcDir)) {
+        const cand = fs.readdirSync(tcDir).find(f => /\.js$/i.test(f) && /mechu|메추/i.test(f));
+        if (cand) {
+          registerMechu = require(path.join(tcDir, cand));
+          console.log(`Loaded text command handler: text-commands/${cand}`);
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ text-commands 스캔 중 경고:', e?.message || e);
+    }
+  }
+}
 
-// ── 로그인
+if (registerMechu) {
+  try {
+    registerMechu(client); // 내부에서 중복 등록 방지 처리
+  } catch (e) {
+    console.error('❌ 메추 핸들러 등록 실패:', e);
+  }
+} else {
+  console.warn('⚠️ text-commands 폴더에서 메추 핸들러를 찾지 못했습니다. (메시지 기반 /메추 비활성화)');
+}
+
+// ─────────────────────────────────────────────────────────────
 client.login(TOKEN);
