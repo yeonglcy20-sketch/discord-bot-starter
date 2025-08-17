@@ -10,19 +10,14 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-// ─────────────────────────────────────────────────────────────
-// 클라이언트: 메시지 기반 명령을 위해 메시지 인텐트 포함
-// (디스코드 개발자 포털 → Bot → Message Content Intent = ON 필요)
+// ✅ 기본(변경 전) 형태: 슬래시 명령 전용 / 메시지 인텐트 없음
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds,         // 슬래시 명령
-    GatewayIntentBits.GuildMessages,  // 메시지 이벤트
-    GatewayIntentBits.MessageContent, // 메시지 본문 접근
+    GatewayIntentBits.Guilds, // 슬래시 명령 처리에 충분
   ],
 });
 
-// ─────────────────────────────────────────────────────────────
-// 슬래시 명령 로딩 (src/commands/*.js)
+// ── 슬래시 명령 로딩 (src/commands/*.js)
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
 if (fs.existsSync(commandsPath)) {
@@ -44,7 +39,7 @@ if (fs.existsSync(commandsPath)) {
   console.warn('⚠️ commands 폴더가 없어 슬래시 명령을 로드하지 않았습니다.');
 }
 
-// ─────────────────────────────────────────────────────────────
+// ── 로그인/이벤트
 client.once(Events.ClientReady, (c) => {
   console.log(`✅ 로그인 성공: ${c.user.tag}`);
 });
@@ -77,44 +72,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────
-// 메시지 기반 "/메추 [카테고리] [개수]" 리스너 동적 로드
-const tcDir = path.join(__dirname, 'text-commands');
-let registerMechu = null;
-try {
-  // 한글 파일명 우선 시도
-  registerMechu = require('./text-commands/메추');
-  console.log('Loaded text command handler: text-commands/메추.js');
-} catch {
-  try {
-    // 영문 대체 파일명 시도
-    registerMechu = require('./text-commands/mechu');
-    console.log('Loaded text command handler: text-commands/mechu.js');
-  } catch {
-    try {
-      // 폴더 스캔하여 mechu/메추 포함된 .js 탐색 (정규화 이슈 대비)
-      if (fs.existsSync(tcDir)) {
-        const cand = fs.readdirSync(tcDir).find(f => /\.js$/i.test(f) && /mechu|메추/i.test(f));
-        if (cand) {
-          registerMechu = require(path.join(tcDir, cand));
-          console.log(`Loaded text command handler: text-commands/${cand}`);
-        }
-      }
-    } catch (e) {
-      console.warn('⚠️ text-commands 스캔 중 경고:', e?.message || e);
-    }
-  }
-}
-
-if (registerMechu) {
-  try {
-    registerMechu(client); // 내부에서 중복 등록 방지 처리
-  } catch (e) {
-    console.error('❌ 메추 핸들러 등록 실패:', e);
-  }
-} else {
-  console.warn('⚠️ text-commands 폴더에서 메추 핸들러를 찾지 못했습니다. (메시지 기반 /메추 비활성화)');
-}
-
-// ─────────────────────────────────────────────────────────────
+// ── 시작
 client.login(TOKEN);
