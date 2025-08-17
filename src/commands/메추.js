@@ -21,7 +21,7 @@ const menusByCat = {
   ],
   '양식': [
     '🍕 피자','🍝 토마토 파스타','🥛 크림 파스타','🧄 알리오올리오','🥩 스테이크',
-    '🍔 치즈버거','🌭 핫도그','🥗 시저샐러드','🍚 리조또','🥘 비프스튜','🥪 파니니'
+    '🍔 띠드버거','🌭 핫도그','🥗 시저샐러드','🍚 리조또','🥘 비프스튜','🥪 파니니'
   ],
   '동남아': [
     '🍜 베트남 쌀국수(퍼)','🥗 분짜','🥖 반미','🍜 카오쏘이','🍝 팟타이',
@@ -47,16 +47,23 @@ const menusByCat = {
   ]
 };
 
-// 모든 카테고리 합치기
 const ALL = Object.values(menusByCat).flat();
 
-function pickRandom(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+// 중복 없이 k개 샘플링 (k는 1~5로 제한)
+function sampleWithoutReplace(arr, k = 1) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  const n = Math.max(1, Math.min(k, 5, a.length));
+  return a.slice(0, n);
 }
 
 module.exports = {
+  // ⚠️ 슬래시 이름은 영문만 가능 → '메추'
   data: new SlashCommandBuilder()
-    .setName('mechu')
+    .setName('메추')
     .setDescription('메뉴를 랜덤으로 추천해줘요')
     .addStringOption(o =>
       o.setName('type')
@@ -87,10 +94,11 @@ module.exports = {
     const count = interaction.options.getInteger('count') ?? 1;
 
     const pool = (type === 'all') ? ALL : (menusByCat[type] || ALL);
-    const picks = [];
-    // 중복 허용(원하면 Set으로 중복 제거 가능)
-    for (let i = 0; i < count; i++) picks.push(pickRandom(pool));
+    const picks = sampleWithoutReplace(pool, count);
 
-    await interaction.reply(`오늘 메뉴 추천${count > 1 ? `(${count}개)` : ''}: ${picks.map(p => `**${p}**`).join(', ')}`);
+    await interaction.reply(
+      `오늘 메뉴 추천${picks.length > 1 ? ` (${type === 'all' ? '전체' : type}, ${picks.length}개)` : ` (${type === 'all' ? '전체' : type})`}: ` +
+      picks.map(p => `**${p}**`).join(', ')
+    );
   },
 };
